@@ -74,7 +74,7 @@ void TMQTTOnewireHandler::OnConnect(int rc)
         if (PrepareInit){
             string controls = string("/devices/") + MQTTConfig.Id + "/controls/+";
             Subscribe(NULL, controls);
-            string controls_switches = string("/devices/") + MQTTConfig.Id + "/controls/+/state/on";
+            string controls_switches = string("/devices/") + MQTTConfig.Id + "/controls/+/+/state/on";
             Subscribe(NULL, controls_switches);
             Subscribe(NULL, Retained_hack);
             Publish(NULL, Retained_hack, "1", 0, false);
@@ -136,9 +136,7 @@ void TMQTTOnewireHandler::RescanBus()
         if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResThermometer) 
             Publish(NULL, GetChannelTopic(device) + "/meta/type", "temperature", 0, true);
         if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){
-            for (int i=0; i<=7; i++){
-                Publish(NULL, GetChannelTopic(device) + "-" + std::to_string(i) + "/meta/type", "switch", 0, true);
-            }
+            Publish(NULL, GetChannelTopic(device) + "/meta/type", "switch", 0, true);
         }  
     }
 
@@ -149,13 +147,9 @@ void TMQTTOnewireHandler::RescanBus()
             Publish(NULL, GetChannelTopic(device), "", 0, true);
         }
         if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){ 
-            for (int i=0; i<=7; i++){
-                Publish(NULL, GetChannelTopic(device) + "-" + std::to_string(i) + "/meta/type", "", 0, true);
-            }
-
+            Publish(NULL, GetChannelTopic(device) + "/meta/type", "", 0, true);
             Publish(NULL, GetChannelTopic(device), "", 0, true);
         }
-
     }
 }
 
@@ -171,13 +165,30 @@ void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
         PrepareInit = false;
     }else {
         string device = topic.substr(controls_prefix.length(), topic.length());
-        string device_on = topic.substr(controls_prefix.length(), topic.length()) + "/on";
+        // trim right part
+        size_t startpos = device.find_first_of("/");
+        if( string::npos != startpos )
+            device = device.substr(0, startpos);
+        string device_on = topic.substr(controls_prefix.length(), topic.length());
         printf("TMQTTOnewireHandler::OnMessage device %s\n", device.c_str());
         for (auto& current : Channels){
-
-            printf("TMQTTOnewireHandler::OnMessage current Id %s\n",  current.GetDeviceId().c_str());
-            if (device == current.GetDeviceId() || device_on == current.GetDeviceId())
+            if (device == current.GetDeviceId()){
+                if (current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){
+                   size_t startpos2 = device_on.find("/state/on");
+                   if (startpos2 == 24){
+                        if( std::isdigit((char)device_on.c_str()[startpos2-1])) {
+                            int channel_number = std::stoi(device_on.substr(startpos2-1));
+    			    string payload = static_cast<const char*>(message->payload);
+			    printf (" Channel %i\n", channel_number);
+		            if (payload.size() >0){	
+                                int param = std::stoi(payload);
+                                printf(" payload %s %i\n", payload.c_str(), param);
+                            }
+                        }
+	            }
+                }
                 return;
+            }
         }
         printf("TMQTTOnewireHandler::OnMessage added device %s\n", device.c_str());
         Channels.emplace_back(device);
@@ -208,7 +219,7 @@ void TMQTTOnewireHandler::UpdateChannelValues() {
             for (int i=0; i<=7; i++){
                 auto result = device.ReadChannel(i);
                 if (result.Defined()) {
-                    Publish(NULL, GetChannelTopic(device)+ "-"+ std::to_string(i) + "/state", std::to_string(*result), 0, true); // Publish current value (make retained)
+                    Publish(NULL, GetChannelTopic(device)+ "/channel"+ std::to_string(i) + "/state", std::to_string(*result), 0, true); // Publish current value (make retained)
                 }
             }
         }

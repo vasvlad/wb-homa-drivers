@@ -24,6 +24,7 @@ public:
 
     TMaybe<float> ReadTemperature() const;
     TMaybe<char> ReadChannel(int channnel_number) const;
+    void WriteChannel(int channnel_number, int value);
 
     friend bool operator== (const TSysfsOnewireDevice & first, const TSysfsOnewireDevice & second);
 private:
