@@ -10,6 +10,7 @@ const string SysfsOnewireDevicesPath = "/sys/bus/w1/devices/";
 enum class TOnewireFamilyType
 {
     ProgResThermometer = 0x28,
+    ProgResDS2408 = 0x29,
     Unknown = 0x00,
 };
 
@@ -22,6 +23,7 @@ public:
     inline const string & GetDeviceId() const {return DeviceId;};
 
     TMaybe<float> ReadTemperature() const;
+    TMaybe<char> ReadChannel(int channnel_number) const;
 
     friend bool operator== (const TSysfsOnewireDevice & first, const TSysfsOnewireDevice & second);
 private:

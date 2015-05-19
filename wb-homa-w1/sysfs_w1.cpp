@@ -14,7 +14,14 @@ TSysfsOnewireDevice::TSysfsOnewireDevice(const string& device_name)
     : DeviceName(device_name)
 {
     //FIXME: fill family number
-    Family = TOnewireFamilyType::ProgResThermometer;
+
+    if (StringStartsWith(device_name, "28-") or StringStartsWith(device_name, "10-")) 
+        Family = TOnewireFamilyType::ProgResThermometer;
+    else
+        if (StringStartsWith(device_name, "29-")) 
+            Family = TOnewireFamilyType::ProgResDS2408;
+        else 
+            Family = TOnewireFamilyType::Unknown;
     DeviceId = DeviceName;
     DeviceDir = SysfsOnewireDevicesPath + DeviceName;
 }
@@ -66,6 +73,35 @@ TMaybe<float> TSysfsOnewireDevice::ReadTemperature() const
 
     return NotDefinedMaybe;
 }
+
+TMaybe<char> TSysfsOnewireDevice::ReadChannel(int channel_number) const
+{
+    std::string data;
+    bool flag=false;
+
+    unsigned char c = 0;
+    unsigned char result = 0;
+    std::ifstream file;
+    std::string fileName=DeviceDir +"/state";
+    file.open(fileName.c_str(), std::ifstream::binary);
+    if (file.is_open()) {
+	c = file.get();
+        if (file.good() && c != 255) {
+            if ((c & (1<<channel_number))>0)
+                result = 1;
+            else
+                result = 0;
+            flag = true;
+        }
+        file.close();
+    }
+
+    if (flag)
+        return (char)result;
+    else
+        return NotDefinedMaybe;
+}
+
 
 void TSysfsOnewireManager::RescanBus()
 {

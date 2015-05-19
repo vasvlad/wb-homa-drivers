@@ -64,7 +64,7 @@ TMQTTOnewireHandler::~TMQTTOnewireHandler() {}
 
 void TMQTTOnewireHandler::OnConnect(int rc)
 {
-	printf("Connected with code %d.\n", rc);
+        printf("Connected with code %d.\n", rc);
 	if(rc == 0){
                 // Meta
         string path = string("/devices/") + MQTTConfig.Id + "/meta/name";
@@ -74,6 +74,8 @@ void TMQTTOnewireHandler::OnConnect(int rc)
         if (PrepareInit){
             string controls = string("/devices/") + MQTTConfig.Id + "/controls/+";
             Subscribe(NULL, controls);
+            string controls_switches = string("/devices/") + MQTTConfig.Id + "/controls/+/state/on";
+            Subscribe(NULL, controls_switches);
             Subscribe(NULL, Retained_hack);
             Publish(NULL, Retained_hack, "1", 0, false);
          }else{
@@ -112,7 +114,7 @@ void TMQTTOnewireHandler::RescanBus()
         while ((ent = readdir (dir)) != NULL) {
             printf ("%s\n", ent->d_name);
             entry_name = ent->d_name;
-            if (StringStartsWith(entry_name, "28-") or StringStartsWith(entry_name, "10-")) {
+            if (StringStartsWith(entry_name, "28-") or StringStartsWith(entry_name, "29-") or StringStartsWith(entry_name, "10-")) {
                     current_channels.emplace_back(entry_name);
             }
         }
@@ -131,18 +133,35 @@ void TMQTTOnewireHandler::RescanBus()
     Channels.swap(current_channels);
 
     for (const TSysfsOnewireDevice& device: new_channels) {
-        Publish(NULL, GetChannelTopic(device) + "/meta/type", "temperature", 0, true);
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResThermometer) 
+            Publish(NULL, GetChannelTopic(device) + "/meta/type", "temperature", 0, true);
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){
+            for (int i=0; i<=7; i++){
+                Publish(NULL, GetChannelTopic(device) + "-" + std::to_string(i) + "/meta/type", "switch", 0, true);
+            }
+        }  
     }
 
     //delete retained messages for absent channels
     for (const TSysfsOnewireDevice& device: absent_channels) {
-        Publish(NULL, GetChannelTopic(device) + "/meta/type", "", 0, true);
-        Publish(NULL, GetChannelTopic(device), "", 0, true);
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResThermometer){ 
+            Publish(NULL, GetChannelTopic(device) + "/meta/type", "", 0, true);
+            Publish(NULL, GetChannelTopic(device), "", 0, true);
+        }
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){ 
+            for (int i=0; i<=7; i++){
+                Publish(NULL, GetChannelTopic(device) + "-" + std::to_string(i) + "/meta/type", "", 0, true);
+            }
+
+            Publish(NULL, GetChannelTopic(device), "", 0, true);
+        }
+
     }
 }
 
 void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
 {
+    printf("TMQTTOnewireHandler::OnMessage. %s\n", message->topic);
     string topic = message->topic;
     string controls_prefix = string("/devices/") + MQTTConfig.Id + "/controls/";
     if (topic == Retained_hack) {// if we get hack_message it means that we've read all retained messages
@@ -152,9 +171,15 @@ void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
         PrepareInit = false;
     }else {
         string device = topic.substr(controls_prefix.length(), topic.length());
-        for (auto& current : Channels)
-            if (device == current.GetDeviceId())
+        string device_on = topic.substr(controls_prefix.length(), topic.length()) + "/on";
+        printf("TMQTTOnewireHandler::OnMessage device %s\n", device.c_str());
+        for (auto& current : Channels){
+
+            printf("TMQTTOnewireHandler::OnMessage current Id %s\n",  current.GetDeviceId().c_str());
+            if (device == current.GetDeviceId() || device_on == current.GetDeviceId())
                 return;
+        }
+        printf("TMQTTOnewireHandler::OnMessage added device %s\n", device.c_str());
         Channels.emplace_back(device);
     }
 
@@ -173,9 +198,19 @@ string TMQTTOnewireHandler::GetChannelTopic(const TSysfsOnewireDevice& device) {
 void TMQTTOnewireHandler::UpdateChannelValues() {
 
     for (const TSysfsOnewireDevice& device: Channels) {
-        auto result = device.ReadTemperature();
-        if (result.Defined()) {
-            Publish(NULL, GetChannelTopic(device), to_string(*result), 0, true); // Publish current value (make retained)
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResThermometer){ 
+            auto result = device.ReadTemperature();
+            if (result.Defined()) {
+                Publish(NULL, GetChannelTopic(device), to_string(*result), 0, true); // Publish current value (make retained)
+            }
+        }
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){ 
+            for (int i=0; i<=7; i++){
+                auto result = device.ReadChannel(i);
+                if (result.Defined()) {
+                    Publish(NULL, GetChannelTopic(device)+ "-"+ std::to_string(i) + "/state", std::to_string(*result), 0, true); // Publish current value (make retained)
+                }
+            }
         }
 
     }
