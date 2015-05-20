@@ -23,8 +23,9 @@ public:
     inline const string & GetDeviceId() const {return DeviceId;};
 
     TMaybe<float> ReadTemperature() const;
-    TMaybe<char> ReadChannel(int channnel_number) const;
-    void WriteChannel(int channnel_number, int value);
+    TMaybe<char> ReadOutput(int channnel_number) const;
+    TMaybe<char> ReadState(int channnel_number) const;
+    void WriteOutput(int channnel_number, int value);
 
     friend bool operator== (const TSysfsOnewireDevice & first, const TSysfsOnewireDevice & second);
 private:

@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 #include "sysfs_w1.h"
+#include <bitset>
 
 bool operator== (const TSysfsOnewireDevice & first, const TSysfsOnewireDevice & second)
 {
@@ -74,9 +75,36 @@ TMaybe<float> TSysfsOnewireDevice::ReadTemperature() const
     return NotDefinedMaybe;
 }
 
-TMaybe<char> TSysfsOnewireDevice::ReadChannel(int channel_number) const
+TMaybe<char> TSysfsOnewireDevice::ReadOutput(int channel_number) const
 {
-    std::string data;
+    bool flag=false;
+
+    unsigned char c = 0;
+    unsigned char result = 0;
+    std::ifstream file;
+//    std::string fileName=DeviceDir +"/state";
+    std::string fileName=DeviceDir +"/output";
+    file.open(fileName.c_str(), std::ifstream::binary);
+    if (file.is_open()) {
+	c = file.get();
+        if (file.good() && c != 255) {
+            if ((c & (1<<channel_number))>0)
+                result = 1;
+            else
+                result = 0;
+            flag = true;
+        }
+        file.close();
+    }
+
+    if (flag)
+        return (char)result;
+    else
+        return NotDefinedMaybe;
+}
+
+TMaybe<char> TSysfsOnewireDevice::ReadState(int channel_number) const
+{
     bool flag=false;
 
     unsigned char c = 0;
@@ -102,6 +130,29 @@ TMaybe<char> TSysfsOnewireDevice::ReadChannel(int channel_number) const
         return NotDefinedMaybe;
 }
 
+void TSysfsOnewireDevice::WriteOutput(int channel_number, int value)
+{
+    unsigned char c = 0;
+    std::fstream iofile;
+    std::string fileName=DeviceDir +"/output";
+    iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::out|std::ios_base::binary);
+    if (iofile.is_open()) {
+	c = iofile.get();
+    }else
+        return;
+    printf("C before %i\n", c);
+    cout << "C before = " << (bitset<8>) c << endl; 
+    if (value == 0)
+        c &= ~(1<<channel_number);
+    else
+        c |= (1<<channel_number);
+    printf("C after %i\n", c);
+
+    cout << "C after = " << (bitset<8>) c << endl; 
+    iofile.put(c);
+    iofile.close();
+    
+}
 
 void TSysfsOnewireManager::RescanBus()
 {

@@ -74,7 +74,7 @@ void TMQTTOnewireHandler::OnConnect(int rc)
         if (PrepareInit){
             string controls = string("/devices/") + MQTTConfig.Id + "/controls/+";
             Subscribe(NULL, controls);
-            string controls_switches = string("/devices/") + MQTTConfig.Id + "/controls/+/+/state/on";
+            string controls_switches = string("/devices/") + MQTTConfig.Id + "/controls/+/+/output/on";
             Subscribe(NULL, controls_switches);
             Subscribe(NULL, Retained_hack);
             Publish(NULL, Retained_hack, "1", 0, false);
@@ -174,8 +174,8 @@ void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
         for (auto& current : Channels){
             if (device == current.GetDeviceId()){
                 if (current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){
-                   size_t startpos2 = device_on.find("/state/on");
-                   if (startpos2 == 24){
+                   size_t startpos2 = device_on.find("/output/on");
+                   if (startpos2 == 24){ 
                         if( std::isdigit((char)device_on.c_str()[startpos2-1])) {
                             int channel_number = std::stoi(device_on.substr(startpos2-1));
     			    string payload = static_cast<const char*>(message->payload);
@@ -183,6 +183,7 @@ void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
 		            if (payload.size() >0){	
                                 int param = std::stoi(payload);
                                 printf(" payload %s %i\n", payload.c_str(), param);
+                                current.WriteOutput(channel_number, param);
                             }
                         }
 	            }
@@ -217,10 +218,15 @@ void TMQTTOnewireHandler::UpdateChannelValues() {
         }
         if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){ 
             for (int i=0; i<=7; i++){
-                auto result = device.ReadChannel(i);
+                auto result = device.ReadState(i);
                 if (result.Defined()) {
                     Publish(NULL, GetChannelTopic(device)+ "/channel"+ std::to_string(i) + "/state", std::to_string(*result), 0, true); // Publish current value (make retained)
                 }
+                result = device.ReadOutput(i);
+                if (result.Defined()) {
+                    Publish(NULL, GetChannelTopic(device)+ "/channel"+ std::to_string(i) + "/output", std::to_string(*result), 0, true); // Publish current value (make retained)
+                }
+
             }
         }
 
