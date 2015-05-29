@@ -171,25 +171,20 @@ void TSysfsOnewireDevice::WriteOutput(int channel_number, int value)
     }
     
 }
-void TSysfsOnewireDevice::SwitchLight(int output_number, int state_number, int on)
+void TSysfsOnewireDevice::SwitchLight(int output_bit_number, int state_bit_number, int on)
 {
     unsigned char c = 0;
     unsigned char state_bit = 0;
     unsigned char output_bit = 0;
 
+    std::string fileName;
     printf("TSysfsOnewireDevice::SwitchLight\n");
     std::fstream iofile;
-    std::string fileName=DeviceDir +"/state";
-    iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::binary);
-    if (iofile.is_open()) {
-	c = iofile.get();
-        if ((c & (1<<state_number))>0)
-            state_bit = 1;
-        else
-            state_bit = 0;
-        iofile.close();
+    auto result = ReadState(state_bit_number);
+    if (result.Defined()) {
+        state_bit = *result;
     }else{
-       return;
+        return;
     }
 
     printf("State bit %i\n", (bool)state_bit);
@@ -204,7 +199,7 @@ void TSysfsOnewireDevice::SwitchLight(int output_number, int state_number, int o
 	c = iofile.get();
     }else
         return;
-    if ((c & (1<<output_number))>0)
+    if ((c & (1<<output_bit_number))>0)
         output_bit = 1;
     else
         output_bit = 0;
@@ -218,40 +213,35 @@ void TSysfsOnewireDevice::SwitchLight(int output_number, int state_number, int o
     printf("Output bit %i\n", (bool)output_bit);
     if (on == 1){
         if (output_bit == 1) {
-            WriteOutput(output_number, 0); 
+            WriteOutput(output_bit_number, 0); 
 
     	    printf("11111\n");
         }else{
-            WriteOutput(output_number, 0); 
-            WriteOutput(output_number, 1); 
+            WriteOutput(output_bit_number, 0); 
+            WriteOutput(output_bit_number, 1); 
 
     	    printf("22222\n");
         }
     }else{
         if (output_bit == 1) {
-            WriteOutput(output_number, 0); 
+            WriteOutput(output_bit_number, 0); 
     	    printf("33333\n");
         }else{
-            WriteOutput(output_number, 1); 
-            WriteOutput(output_number, 0); 
-            WriteOutput(output_number, 1); 
+            WriteOutput(output_bit_number, 1); 
+            WriteOutput(output_bit_number, 0); 
+            WriteOutput(output_bit_number, 1); 
     	    printf("4444\n");
         }
     }
     iofile.close();
 
-    fileName=DeviceDir +"/state";
-    iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::binary);
-    if (iofile.is_open()) {
-	c = iofile.get();
-        if ((c & (1<<state_number))>0)
-            state_bit = 1;
-        else
-            state_bit = 0;
-        iofile.close();
+    result = ReadState(state_bit_number);
+    if (result.Defined()) {
+        state_bit = *result;
     }else{
-       return;
+        return;
     }
+
 
     printf("State bit %i\n", (bool)state_bit);
 
