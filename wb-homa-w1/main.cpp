@@ -74,7 +74,7 @@ void TMQTTOnewireHandler::OnConnect(int rc)
         if (PrepareInit){
             string controls = string("/devices/") + MQTTConfig.Id + "/controls/+";
             Subscribe(NULL, controls);
-            string controls_switches = string("/devices/") + MQTTConfig.Id + "/controls/+/+/output/on";
+            string controls_switches = string("/devices/") + MQTTConfig.Id + "/controls/+/+/light/on";
             Subscribe(NULL, controls_switches);
             Subscribe(NULL, Retained_hack);
             Publish(NULL, Retained_hack, "1", 0, false);
@@ -155,6 +155,8 @@ void TMQTTOnewireHandler::RescanBus()
 
 void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
 {
+    int light_output[4] = {5,4,3,2};
+    int light_state[4] = {7,6,6,4};
     printf("TMQTTOnewireHandler::OnMessage. %s\n", message->topic);
     string topic = message->topic;
     string controls_prefix = string("/devices/") + MQTTConfig.Id + "/controls/";
@@ -174,16 +176,17 @@ void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
         for (auto& current : Channels){
             if (device == current.GetDeviceId()){
                 if (current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){
-                   size_t startpos2 = device_on.find("/output/on");
+                   size_t startpos2 = device_on.find("/light/on");
                    if (startpos2 == 24){ 
                         if( std::isdigit((char)device_on.c_str()[startpos2-1])) {
-                            int channel_number = std::stoi(device_on.substr(startpos2-1));
+                            int light_number = std::stoi(device_on.substr(startpos2-1));
     			    string payload = static_cast<const char*>(message->payload);
-			    printf (" Channel %i\n", channel_number);
+			    printf (" Light number %i\n", light_number);
 		            if (payload.size() >0){	
                                 int param = std::stoi(payload);
                                 printf(" payload %s %i\n", payload.c_str(), param);
-                                current.WriteOutput(channel_number, param);
+                              //  current.WriteOutput(channel_number, param);
+ 				current.SwitchLight(light_output[light_number], light_state[light_number], param);
                             }
                         }
 	            }

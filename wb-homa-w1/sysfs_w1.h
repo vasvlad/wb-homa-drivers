@@ -26,6 +26,7 @@ public:
     TMaybe<char> ReadOutput(int channnel_number) const;
     TMaybe<char> ReadState(int channnel_number) const;
     void WriteOutput(int channnel_number, int value);
+    void SwitchLight(int output_number, int state_number, int on);
 
     friend bool operator== (const TSysfsOnewireDevice & first, const TSysfsOnewireDevice & second);
 private:

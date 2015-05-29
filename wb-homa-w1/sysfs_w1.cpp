@@ -133,25 +133,128 @@ TMaybe<char> TSysfsOnewireDevice::ReadState(int channel_number) const
 void TSysfsOnewireDevice::WriteOutput(int channel_number, int value)
 {
     unsigned char c = 0;
+    unsigned char c1 = 0;
+    unsigned char c2 = 0;
+    int attempt = 3;
+    while (attempt >=0){
+        std::fstream iofile;
+        std::string fileName=DeviceDir +"/output";
+        iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::binary);
+        if (iofile.is_open()) {
+    	    c = iofile.get();
+            c1 = c;
+        }else
+            return;
+        iofile.close();
+        iofile.open(fileName.c_str(), std::ios_base::out|std::ios_base::binary);
+        cout << "C before = " << (bitset<8>) c << endl; 
+        if (value == 0)
+            c &= ~(1<<channel_number);
+        else
+            c |= (1<<channel_number);
+    
+        cout << "C after = " << (bitset<8>) c << endl; 
+        iofile.put(c);
+        iofile.flush();
+        iofile.close();
+        iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::binary);
+        if (iofile.is_open()) {
+    	    c2 = iofile.get();
+        }else
+            return;
+        iofile.close();
+        if (c1 != c2)
+            return;
+        cout << "attempt"  << endl; 
+
+        attempt--;
+    }
+    
+}
+void TSysfsOnewireDevice::SwitchLight(int output_number, int state_number, int on)
+{
+    unsigned char c = 0;
+    unsigned char state_bit = 0;
+    unsigned char output_bit = 0;
+
+    printf("TSysfsOnewireDevice::SwitchLight\n");
     std::fstream iofile;
-    std::string fileName=DeviceDir +"/output";
-    iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::out|std::ios_base::binary);
+    std::string fileName=DeviceDir +"/state";
+    iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::binary);
+    if (iofile.is_open()) {
+	c = iofile.get();
+        if ((c & (1<<state_number))>0)
+            state_bit = 1;
+        else
+            state_bit = 0;
+        iofile.close();
+    }else{
+       return;
+    }
+
+    printf("State bit %i\n", (bool)state_bit);
+    iofile.close();
+
+    if (on == state_bit)
+        return;
+
+    fileName=DeviceDir +"/output";
+    iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::binary);
     if (iofile.is_open()) {
 	c = iofile.get();
     }else
         return;
-    printf("C before %i\n", c);
-    cout << "C before = " << (bitset<8>) c << endl; 
-    if (value == 0)
-        c &= ~(1<<channel_number);
+    if ((c & (1<<output_number))>0)
+        output_bit = 1;
     else
-        c |= (1<<channel_number);
-    printf("C after %i\n", c);
+        output_bit = 0;
 
-    cout << "C after = " << (bitset<8>) c << endl; 
-    iofile.put(c);
     iofile.close();
-    
+
+//    iofile.open(fileName.c_str(), std::ios_base::out|std::ios_base::binary);
+    printf("C1 before %i\n", c);
+    cout << "C1 before = " << (bitset<8>) c << endl; 
+
+    printf("Output bit %i\n", (bool)output_bit);
+    if (on == 1){
+        if (output_bit == 1) {
+            WriteOutput(output_number, 0); 
+
+    	    printf("11111\n");
+        }else{
+            WriteOutput(output_number, 0); 
+            WriteOutput(output_number, 1); 
+
+    	    printf("22222\n");
+        }
+    }else{
+        if (output_bit == 1) {
+            WriteOutput(output_number, 0); 
+    	    printf("33333\n");
+        }else{
+            WriteOutput(output_number, 1); 
+            WriteOutput(output_number, 0); 
+            WriteOutput(output_number, 1); 
+    	    printf("4444\n");
+        }
+    }
+    iofile.close();
+
+    fileName=DeviceDir +"/state";
+    iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::binary);
+    if (iofile.is_open()) {
+	c = iofile.get();
+        if ((c & (1<<state_number))>0)
+            state_bit = 1;
+        else
+            state_bit = 0;
+        iofile.close();
+    }else{
+       return;
+    }
+
+    printf("State bit %i\n", (bool)state_bit);
+
 }
 
 void TSysfsOnewireManager::RescanBus()
