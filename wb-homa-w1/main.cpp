@@ -156,7 +156,7 @@ void TMQTTOnewireHandler::RescanBus()
 void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
 {
     int light_output[4] = {5,4,3,2};
-    int light_state[4] = {7,6,6,4};
+    int light_state[4] = {7,0,6,4};
     printf("TMQTTOnewireHandler::OnMessage. %s\n", message->topic);
     string topic = message->topic;
     string controls_prefix = string("/devices/") + MQTTConfig.Id + "/controls/";
@@ -225,10 +225,10 @@ void TMQTTOnewireHandler::UpdateChannelValues() {
                 if (result.Defined()) {
                     Publish(NULL, GetChannelTopic(device)+ "/channel"+ std::to_string(i) + "/state", std::to_string(*result), 0, true); // Publish current value (make retained)
                 }
-                result = device.ReadOutput(i);
-                if (result.Defined()) {
-                    Publish(NULL, GetChannelTopic(device)+ "/channel"+ std::to_string(i) + "/output", std::to_string(*result), 0, true); // Publish current value (make retained)
-                }
+//                result = device.ReadOutput(i);
+//                if (result.Defined()) {
+//                    Publish(NULL, GetChannelTopic(device)+ "/channel"+ std::to_string(i) + "/output", std::to_string(*result), 0, true); // Publish current value (make retained)
+//                }
 
             }
         }
