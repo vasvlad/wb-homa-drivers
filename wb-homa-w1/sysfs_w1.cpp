@@ -70,6 +70,8 @@ TMaybe<float> TSysfsOnewireDevice::ReadTemperature() const
 
 
         return (float) data_int/1000.0f; // Temperature given by kernel is in thousandths of degrees
+    }else{
+        cout << "Bad CRC in Temperature"  << endl; 
     }
 
     return NotDefinedMaybe;
@@ -147,7 +149,7 @@ TMaybe<char> TSysfsOnewireDevice::ReadState(int channel_number) const
            break;
         }
     
-        cout << "Read state attempt"  << endl; 
+        cout << "Read state attempt "  << this->DeviceId << endl; 
         attempt--;
     }
     if (flag)
