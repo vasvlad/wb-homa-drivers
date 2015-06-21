@@ -4,6 +4,7 @@
 #include <sstream>
 #include "sysfs_w1.h"
 #include <bitset>
+#include <unistd.h>
 
 bool operator== (const TSysfsOnewireDevice & first, const TSysfsOnewireDevice & second)
 {
@@ -152,8 +153,10 @@ TMaybe<char> TSysfsOnewireDevice::ReadState(int channel_number) const
         cout << "Read state attempt "  << this->DeviceId << endl; 
         attempt--;
     }
-    if (flag)
+    if (flag){
+//        printf("ReadState %i\n", result);
         return (char)result;
+    }
     else
         return NotDefinedMaybe;
 }
@@ -205,6 +208,7 @@ void TSysfsOnewireDevice::WriteOutput(int channel_number, int value)
         iofile.put(c);
         iofile.flush();
         iofile.close();
+return;
         iofile.open(fileName.c_str(), std::ios_base::in|std::ios_base::binary);
         if (iofile.is_open()) {
     	    c2 = iofile.get();
@@ -224,7 +228,7 @@ void TSysfsOnewireDevice::SwitchLight(int output_bit_number, int state_bit_numbe
     unsigned char output_bit = 0;
     int attempt = 3;
 
-    printf("TSysfsOnewireDevice::SwitchLight\n");
+    printf("TSysfsOnewireDevice::SwitchLight. We want %i\n", on);
     auto result = ReadState(state_bit_number);
     if (result.Defined()) {
         state_bit = *result;
@@ -250,24 +254,21 @@ void TSysfsOnewireDevice::SwitchLight(int output_bit_number, int state_bit_numbe
         if (on == 1){
             if (output_bit == 1) {
                 WriteOutput(output_bit_number, 0); 
-        	    printf("11111\n");
+                printf ("111111111111\n");
             }else{
+                printf ("2222222222222\n");
                 WriteOutput(output_bit_number, 0); 
                 WriteOutput(output_bit_number, 1); 
-        	    printf("22222\n");
             }
         }else{
             if (output_bit == 1) {
+                printf ("3333333333\n");
                 WriteOutput(output_bit_number, 0); 
-        	    printf("33333\n");
             }else{
+                printf ("44444444444\n");
                 WriteOutput(output_bit_number, 1); 
-                WriteOutput(output_bit_number, 0); 
-                WriteOutput(output_bit_number, 1); 
-        	    printf("4444\n");
             }
         }
-    
         result = ReadState(state_bit_number);
         if (result.Defined()) {
             state_bit = *result;
@@ -275,10 +276,22 @@ void TSysfsOnewireDevice::SwitchLight(int output_bit_number, int state_bit_numbe
             return;
         }
         if (state_bit !=  on){
+//            usleep (1000);
+            cout << "Another check"  << endl; 
+            result = ReadState(state_bit_number);
+            if (result.Defined()) {
+                state_bit = *result;
+            }else{
+                return;
+            }
+        }else
+            break;
+        if (state_bit !=  on){
             cout << "attempt in SwitchLight"  << endl; 
             attempt--;
         }else
             break;
+
     }
     printf("State bit %i\n", (bool)state_bit);
 

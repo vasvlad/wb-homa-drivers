@@ -143,23 +143,23 @@ $(NINJABRIDGE_DIR)/$(NINJABRIDGE_BIN) : $(NINJABRIDGE_DIR)/main.o  $(NINJABRIDGE
 $(TEST_DIR)/testlog.o: $(TEST_DIR)/testlog.cpp
 	${CXX} -c $< -o $@ ${CFLAGS}
 
-$(TEST_DIR)/modbus_test.o: $(TEST_DIR)/modbus_test.cpp
-	${CXX} -c $< -o $@ ${CFLAGS}
-
-$(TEST_DIR)/fake_modbus.o: $(TEST_DIR)/fake_modbus.cpp
-	${CXX} -c $< -o $@ ${CFLAGS}
-
-$(TEST_DIR)/fake_mqtt.o: $(TEST_DIR)/fake_mqtt.cpp
-	${CXX} -c $< -o $@ ${CFLAGS}
-
-$(TEST_DIR)/main.o: $(TEST_DIR)/main.cpp
-	${CXX} -c $< -o $@ ${CFLAGS}
-
-$(TEST_DIR)/$(TEST_BIN): $(MODBUS_OBJS) $(COMMON_O) \
-  $(TEST_DIR)/testlog.o $(TEST_DIR)/modbus_test.o $(TEST_DIR)/fake_modbus.o \
-  $(TEST_DIR)/fake_mqtt.o $(TEST_DIR)/main.o
-	${CXX} $^ ${LDFLAGS} -o $@ $(TEST_LIBS) $(MODBUS_LIBS)
-
+#$(TEST_DIR)/modbus_test.o: $(TEST_DIR)/modbus_test.cpp
+#	${CXX} -c $< -o $@ ${CFLAGS}
+#
+#$(TEST_DIR)/fake_modbus.o: $(TEST_DIR)/fake_modbus.cpp
+#	${CXX} -c $< -o $@ ${CFLAGS}
+#
+#$(TEST_DIR)/fake_mqtt.o: $(TEST_DIR)/fake_mqtt.cpp
+#	${CXX} -c $< -o $@ ${CFLAGS}
+#
+#$(TEST_DIR)/main.o: $(TEST_DIR)/main.cpp
+#	${CXX} -c $< -o $@ ${CFLAGS}
+#
+#$(TEST_DIR)/$(TEST_BIN): $(MODBUS_OBJS) $(COMMON_O) \
+#  $(TEST_DIR)/testlog.o $(TEST_DIR)/modbus_test.o $(TEST_DIR)/fake_modbus.o \
+#  $(TEST_DIR)/fake_mqtt.o $(TEST_DIR)/main.o
+#	${CXX} $^ ${LDFLAGS} -o $@ $(TEST_LIBS) $(MODBUS_LIBS)
+#
 #mqtt-logger
 $(LOGGER)/$(LOGGER_BIN): $(LOGGER)/main.o $(COMMON_O)
 	${CXX} $^ ${LDFLAGS} -o $@
