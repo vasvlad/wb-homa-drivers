@@ -155,8 +155,8 @@ void TMQTTOnewireHandler::RescanBus()
 
 void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
 {
-    int light_output[6] = {5,4,3,2,4,5};
-    int light_state[6]  = {7,0,6,1,3,2};
+    int light_output[7] = {5,4,3,2,4,5,4};
+    int light_state[7]  = {7,0,6,1,3,2,6};
 
     printf("TMQTTOnewireHandler::OnMessage. %s\n", message->topic);
     string topic = message->topic;
