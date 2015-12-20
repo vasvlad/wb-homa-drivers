@@ -11,6 +11,7 @@ enum class TOnewireFamilyType
 {
     ProgResThermometer = 0x28,
     ProgResDS2408 = 0x29,
+    ProgResDS2413 = 0x3a,
     Unknown = 0x00,
 };
 

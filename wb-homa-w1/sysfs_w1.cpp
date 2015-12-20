@@ -23,7 +23,10 @@ TSysfsOnewireDevice::TSysfsOnewireDevice(const string& device_name)
         if (StringStartsWith(device_name, "29-")) 
             Family = TOnewireFamilyType::ProgResDS2408;
         else 
-            Family = TOnewireFamilyType::Unknown;
+            if (StringStartsWith(device_name, "3a-")) 
+                Family = TOnewireFamilyType::ProgResDS2413;
+            else
+                Family = TOnewireFamilyType::Unknown;
     DeviceId = DeviceName;
     DeviceDir = SysfsOnewireDevicesPath + DeviceName;
 }

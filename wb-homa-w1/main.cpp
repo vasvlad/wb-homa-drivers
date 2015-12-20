@@ -114,7 +114,7 @@ void TMQTTOnewireHandler::RescanBus()
         while ((ent = readdir (dir)) != NULL) {
             printf ("%s\n", ent->d_name);
             entry_name = ent->d_name;
-            if (StringStartsWith(entry_name, "28-") or StringStartsWith(entry_name, "29-") or StringStartsWith(entry_name, "10-")) {
+            if (StringStartsWith(entry_name, "28-") or StringStartsWith(entry_name, "29-") or StringStartsWith(entry_name, "3a-") or StringStartsWith(entry_name, "10-")) {
                     current_channels.emplace_back(entry_name);
             }
         }
@@ -138,6 +138,9 @@ void TMQTTOnewireHandler::RescanBus()
         if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){
             Publish(NULL, GetChannelTopic(device) + "/meta/type", "switch", 0, true);
         }  
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){
+            Publish(NULL, GetChannelTopic(device) + "/meta/type", "switch", 0, true);
+        }  
     }
 
     //delete retained messages for absent channels
@@ -150,6 +153,11 @@ void TMQTTOnewireHandler::RescanBus()
             Publish(NULL, GetChannelTopic(device) + "/meta/type", "", 0, true);
             Publish(NULL, GetChannelTopic(device), "", 0, true);
         }
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){ 
+            Publish(NULL, GetChannelTopic(device) + "/meta/type", "", 0, true);
+            Publish(NULL, GetChannelTopic(device), "", 0, true);
+        }
+
     }
 }
 
@@ -176,7 +184,7 @@ void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
         printf("TMQTTOnewireHandler::OnMessage device %s\n", device.c_str());
         for (auto& current : Channels){
             if (device == current.GetDeviceId()){
-                if (current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){
+                if (current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408 || current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){
                    size_t startpos2 = device_on.find("/light/on");
                    if (startpos2 == 24){ 
                         if( std::isdigit((char)device_on.c_str()[startpos2-1])) {
@@ -220,7 +228,7 @@ void TMQTTOnewireHandler::UpdateChannelValues() {
                 Publish(NULL, GetChannelTopic(device), to_string(*result), 0, true); // Publish current value (make retained)
             }
         }
-        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){ 
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408 || device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){ 
             for (int i=0; i<=7; i++){
                 auto result = device.ReadState(i);
                 if (result.Defined()) {
