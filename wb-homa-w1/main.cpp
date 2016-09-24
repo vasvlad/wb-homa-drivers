@@ -13,6 +13,8 @@
 #include <wbmqtt/utils.h>
 #include <wbmqtt/mqtt_wrapper.h>
 
+
+
 #include "sysfs_w1.h"
 
 using namespace std;
@@ -74,8 +76,6 @@ void TMQTTOnewireHandler::OnConnect(int rc)
             Subscribe(NULL, controls);
             string controls_switches = string("/devices/") + MQTTConfig.Id + "/controls/+/+/light/on";
             Subscribe(NULL, controls_switches);
-            Subscribe(NULL, Retained_hack);
-            Publish(NULL, Retained_hack, "1", 0, false);
             Subscribe(NULL, Retained_old);
             Publish(NULL, Retained_old, "1", 0, false);
          }else{
