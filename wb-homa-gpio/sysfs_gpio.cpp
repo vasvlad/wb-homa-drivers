@@ -121,7 +121,7 @@ int TSysfsGpio::Unexport()
     return 0;
 }
 
-int TSysfsGpio::SetDirection(bool input)
+int TSysfsGpio::SetDirection(bool input, bool output_state)
 {
     cerr << "DEBUG:: gpio=" << Gpio << " SetDirection() input= " << input << endl;
 
@@ -129,7 +129,7 @@ int TSysfsGpio::SetDirection(bool input)
     setdir_str += to_string(Gpio) + "/direction";
 
     ofstream setdirgpio(setdir_str.c_str()); // open direction file for gpio
-    if (setdirgpio < 0) {
+    if (!setdirgpio.is_open()) {
         cerr << " OPERATION FAILED: Unable to set direction of GPIO"<< Gpio <<" ."<< endl;
         setdirgpio.close();
         return -1;
@@ -140,7 +140,8 @@ int TSysfsGpio::SetDirection(bool input)
         setdirgpio << "in";
         In=true;
     } else {
-        setdirgpio << "out";
+        setdirgpio << (output_state ? "high" : "low");
+            
         In=false;
     }
 
@@ -278,6 +279,7 @@ vector<TPublishPair> TSysfsGpio::MetaType()
     output_vector.push_back(make_pair("", "switch"));
     return output_vector;
 }
+
 vector<TPublishPair>  TSysfsGpio::GpioPublish()
 {
     vector<TPublishPair> output_vector;
@@ -289,6 +291,7 @@ vector<TPublishPair>  TSysfsGpio::GpioPublish()
     output_vector.push_back(make_pair("", to_string(output_value)));//output saved value 
     return output_vector; 
 }
+
 string TSysfsGpio::GetInterruptEdge()
 {
     if (InterruptEdge == "") {
@@ -297,10 +300,21 @@ string TSysfsGpio::GetInterruptEdge()
     else 
         return InterruptEdge;
 }
+
 void TSysfsGpio::SetInterruptEdge (string s)
 {
     InterruptEdge = s;
 }
+
+void TSysfsGpio::SetInitialValues(float total)
+{
+}
+
+TPublishPair TSysfsGpio::CheckTimeInterval()
+{
+    return make_pair(string(""),string(""));
+}
+
 TSysfsGpio::~TSysfsGpio()
 {
     if ( FileDes >= 0 ) {

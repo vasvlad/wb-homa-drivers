@@ -1,0 +1,7 @@
+usr/bin
+etc
+etc/init.d
+var/lib/wirenboard
+var/lib/wirenboard/db
+etc/wb-configs.d
+etc/wb-mqtt-confed/schemas

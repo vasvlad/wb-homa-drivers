@@ -11,6 +11,8 @@
 #define WATT_METER "watt_meter"
 #define WATER_METER "water_meter"
 #define MICROSECONDS_DELAY 200000
+#define CURRENT_TIME_INTERVAL 1
+#define NULL_TIME_INTERVAL 100
 
 using namespace std;
 
@@ -24,9 +26,9 @@ public:
     ~TSysfsGpio();
     int Export();
     int Unexport();
-    int SetDirection(bool input = true); // Set GPIO Direction
+    int SetDirection(bool input = true, bool output_state = false); // Set GPIO Direction
     inline int SetInput() { return SetDirection(true); };
-    inline int SetOutput() { return SetDirection(false); };
+    inline int SetOutput(bool state = false) { return SetDirection(false, state); };
 
     int SetValue(int val);
     // returns GPIO value (0 or 1), or negative number in case of error
@@ -60,6 +62,8 @@ public:
     void SetInterruptEdge(string s); // set front of the impulse
     bool IsDebouncing(); // if interval between two interruptions is less than 1 milisecond it will return true;
     inline int GetCounts() { return Counts; }
+    virtual void SetInitialValues(float total);
+    virtual TPublishPair CheckTimeInterval(); // check if metter is alive
 protected:
 // invert value if needed
     inline int PrepareValue(int value) { return value ^ Inverted;};
@@ -76,9 +80,9 @@ private:
     int FileDes;
     mutable mutex G_mutex;
     bool In;//direction true = in false = out
-    std::chrono::steady_clock::time_point Previous_Interrupt_Time;
     bool Debouncing;
 protected: 
+    std::chrono::steady_clock::time_point Previous_Interrupt_Time;
     long long unsigned int Interval;
     long unsigned int Counts;
     string InterruptEdge;
@@ -89,15 +93,18 @@ protected:
 class TSysfsGpioBaseCounter : public TSysfsGpio 
 {
     public:
-        explicit TSysfsGpioBaseCounter(int gpio, bool inverted, string interrupt_edge, string type, int multiplier);
+        explicit TSysfsGpioBaseCounter(int gpio, bool inverted, string interrupt_edge, string type, int multiplier, int decimal_points_total, int decimal_points_current);
         TSysfsGpioBaseCounter(const TSysfsGpioBaseCounter& other) = delete;
         TSysfsGpioBaseCounter(TSysfsGpioBaseCounter&& tmp) ;
         ~TSysfsGpioBaseCounter();
         vector<TPublishPair> MetaType();
         vector<TPublishPair> GpioPublish();   
         int InterruptUp();// if user didn't specify interrupt edge, method would figure it out
+        void SetInitialValues(float total);// set total when starting
+        TPublishPair CheckTimeInterval();
     
     private:
+        string SetDecimalPlaces(float value, int decimal_points);
         string Type;
         int Multiplier;
         int ConvertingMultiplier;// multiplier that converts value to appropriate measuring unit according to meter type
@@ -107,5 +114,9 @@ class TSysfsGpioBaseCounter : public TSysfsGpio
         string Topic2;
         string Value_Topic1;
         string Value_Topic2;
+        int DecimalPlacesTotal;
+        int DecimalPlacesCurrent;
+        float InitialTotal;
+        bool PrintedNULL;
 
 };

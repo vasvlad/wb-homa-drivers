@@ -1,11 +1,11 @@
 #include <mosquittopp.h>
 #include <fstream>
-#include "common/utils.h"
-#include "common/mqtt_wrapper.h"
+#include <wbmqtt/utils.h>
+#include <wbmqtt/mqtt_wrapper.h>
 #include "sysfs_adc.h"
 
 using namespace std;
-   
+
 struct THandlerConfig
 {
     std::string DeviceName = "Adcs";
@@ -16,8 +16,7 @@ struct THandlerConfig
 class TMQTTAdcHandler : public TMQTTWrapper
 {
 public:
-    TMQTTAdcHandler(const TMQTTAdcHandler::TConfig& mqtt_config, const THandlerConfig handler_config) ;
-    ~TMQTTAdcHandler();
+    explicit TMQTTAdcHandler(const TMQTTAdcHandler::TConfig& mqtt_config, const THandlerConfig handler_config) ;
 
     void OnConnect(int rc) ;
     void OnMessage(const struct mosquitto_message *message);
@@ -28,8 +27,7 @@ public:
     virtual void UpdateValue() ;
 private:
     THandlerConfig Config;
-    vector<std::shared_ptr<TSysfsAdc>> AdcHandlers;
-
+    vector<std::unique_ptr<TSysfsAdc>> AdcHandlers;
     vector<std::shared_ptr<TSysfsAdcChannel>> Channels;
 };
 

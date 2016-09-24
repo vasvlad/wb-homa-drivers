@@ -2,6 +2,9 @@
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
+#include <sstream>
+#include <iomanip>
+
 #include "adc_handler.h"
 
 using namespace std;
@@ -20,24 +23,17 @@ TMQTTAdcHandler::TMQTTAdcHandler(const TMQTTAdcHandler::TConfig& mqtt_config, TH
     Config(handler_config)
 {
     for (auto& channel_config : Config.Channels){
-        std::shared_ptr<TSysfsAdc> adc_handler(nullptr); 
-        if (channel_config.Type == "mux"){
-            adc_handler.reset(new TSysfsAdcMux(GetSysfsPrefix(), Config.Debug, channel_config));
-                    }else {
-            adc_handler.reset(new TSysfsAdcPhys(GetSysfsPrefix(), Config.Debug, channel_config));
+        if (channel_config.Type == "mux") {
+            AdcHandlers.emplace_back(new TSysfsAdcMux(GetSysfsPrefix(), Config.Debug, channel_config));
+		} else {
+            AdcHandlers.emplace_back(new TSysfsAdcPhys(GetSysfsPrefix(), Config.Debug, channel_config));
         }
-        for (int i = 0; i < adc_handler->GetNumberOfChannels(); ++i)
-                Channels.push_back(adc_handler->GetChannel(i));
-        AdcHandlers.push_back(adc_handler);
+        for (int i = 0; i < AdcHandlers.back()->GetNumberOfChannels(); ++i) {
+			Channels.push_back(AdcHandlers.back()->GetChannel(i));
+		}
 
     }
 	Connect();
-}
-
-TMQTTAdcHandler::~TMQTTAdcHandler()
-{
-    Channels.clear();
-    AdcHandlers.clear();
 }
 
 void TMQTTAdcHandler::OnConnect(int rc)
@@ -54,7 +50,6 @@ void TMQTTAdcHandler::OnConnect(int rc)
     for (auto channel : Channels) {
         std::string topic = GetChannelTopic(*channel);
         std::string type = channel->GetType();
-        //Publish(NULL, topic + "/meta/type", "text", 0, true);
         Publish(NULL, topic + "/meta/order", std::to_string(n++), 0, true);
         Publish(NULL, topic + "/meta/type", type, 0, true);
     }
@@ -87,31 +82,9 @@ void TMQTTAdcHandler::UpdateChannelValues()
         float value = channel->GetValue();
         if (Config.Debug)
             std::cerr << "channel: " << channel->GetName() << " value: " << value << std::endl;
-        string output; 
-        if (isnan(value)) {
-            output = "nan";
-        } else {
-            char buff[10];
-            if (value == round(value)) {
-                    sprintf(buff, "%.0f", value);
-            } else {
-                sprintf(buff, "%.5f", value);
-                int decimal_places = -1;
-                bool stop = false;
-                for(int i = 0; (i < strlen(buff)) && (!stop); i++) {
-                    if (buff[i] == '.' ) 
-                        decimal_places = 0;
-                    if (decimal_places > -1) {
-                        if (decimal_places > channel->DecimalPlaces) {
-                            buff[i] = '\0';
-                            stop = true;
-                        }
-                        decimal_places++;
-                    }
-                }
-            }
-            output = buff;
-        }
-        Publish(NULL, GetChannelTopic(*channel), output, 0, true);
+
+		std::ostringstream out;
+		out << std::fixed << std::setprecision(channel->DecimalPlaces) << value;
+        Publish(NULL, GetChannelTopic(*channel), out.str(), 0, true);
     }
 }

@@ -7,13 +7,11 @@
 #include "dirent.h"
 #include <getopt.h>
 #include <chrono>
-// This is the JSON header
-#include "jsoncpp/json/json.h"
 
 #include <mosquittopp.h>
 
-#include "common/utils.h"
-#include "common/mqtt_wrapper.h"
+#include <wbmqtt/utils.h>
+#include <wbmqtt/mqtt_wrapper.h>
 
 #include "sysfs_w1.h"
 
@@ -43,7 +41,7 @@ class TMQTTOnewireHandler : public TMQTTWrapper
     private:
         vector<TSysfsOnewireDevice> Channels;
         bool PrepareInit;// needed for cleaning mqtt messages before start working
-        string Retained_hack;// we need some message to be sure, that we got all retained messages in starting
+        string Retained_old;// we need some message to be sure, that we got all retained messages in starting
 
 };
 
@@ -56,7 +54,7 @@ TMQTTOnewireHandler::TMQTTOnewireHandler(const TMQTTOnewireHandler::TConfig& mqt
 {
 	Connect();
 
-    Retained_hack = string("/tmp/") + MQTTConfig.Id + "/retained_hack";
+    Retained_old = string("/tmp/") + MQTTConfig.Id + "/retained_old";
 
 }
 
@@ -78,6 +76,8 @@ void TMQTTOnewireHandler::OnConnect(int rc)
             Subscribe(NULL, controls_switches);
             Subscribe(NULL, Retained_hack);
             Publish(NULL, Retained_hack, "1", 0, false);
+            Subscribe(NULL, Retained_old);
+            Publish(NULL, Retained_old, "1", 0, false);
          }else{
             RescanBus();
          }
@@ -114,7 +114,12 @@ void TMQTTOnewireHandler::RescanBus()
         while ((ent = readdir (dir)) != NULL) {
             printf ("%s\n", ent->d_name);
             entry_name = ent->d_name;
-            if (StringStartsWith(entry_name, "28-") or StringStartsWith(entry_name, "29-") or StringStartsWith(entry_name, "3a-") or StringStartsWith(entry_name, "10-")) {
+            if (StringStartsWith(entry_name, "28-") ||
+                StringStartsWith(entry_name, "29-") ||
+                StringStartsWith(entry_name, "10-") ||
+                StringStartsWith(entry_name, "3a-") ||
+                StringStartsWith(entry_name, "22-") )
+            {
                     current_channels.emplace_back(entry_name);
             }
         }
@@ -169,9 +174,9 @@ void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
     printf("TMQTTOnewireHandler::OnMessage. %s\n", message->topic);
     string topic = message->topic;
     string controls_prefix = string("/devices/") + MQTTConfig.Id + "/controls/";
-    if (topic == Retained_hack) {// if we get hack_message it means that we've read all retained messages
-        Publish(NULL, Retained_hack, "", 0, true);
-        unsubscribe(NULL, Retained_hack.c_str());
+    if (topic == Retained_old) {// if we get old_message it means that we've read all retained messages
+        Publish(NULL, Retained_old, "", 0, true);
+        unsubscribe(NULL, Retained_old.c_str());
         unsubscribe(NULL, (controls_prefix + "+").c_str());
         PrepareInit = false;
     }else {

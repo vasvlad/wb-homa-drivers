@@ -26,6 +26,50 @@ namespace {
                 resistance *= 1000;
         return resistance;
     }
+	void PopulateMuxChannel(TMUXChannel& mux_channel, const Json::Value&  item)
+	{
+		if (item.isMember("id"))
+			mux_channel.Id = item["id"].asString();
+
+        if (item.isMember("multiplier"))
+            mux_channel.Multiplier = item["multiplier"].asFloat() / MXS_LRADC_DEFAULT_SCALE_FACTOR;
+
+        if (item.isMember("voltage_multiplier"))
+            mux_channel.Multiplier = item["voltage_multiplier"].asFloat();
+
+		if (item.isMember("readings_number")) {
+			mux_channel.ReadingsNumber = item["readings_number"].asInt();
+		}
+
+		if (item.isMember("decimal_places")) {
+			mux_channel.DecimalPlaces = item["decimal_places"].asInt();
+		}
+
+		if (item.isMember("discharge_channel")) {
+			mux_channel.DischargeChannel = item["discharge_channel"].asInt();
+		}
+
+		if (item.isMember("type"))
+			mux_channel.Type = item["type"].asString();
+		if (item.isMember("current")){
+			int current = item["current"].asInt();
+			if ( (current < 0) || (current > 300) || ( (current % 20) != 0)) {
+				cerr << "Error: wrong current value \n";
+				exit(EXIT_FAILURE);
+			}
+			mux_channel.Current = current;
+		}
+		if (item.isMember("resistance1")){
+			int resistance = ReadResistance(item["resistance1"].asString());
+			mux_channel.Resistance1 = resistance;
+		}
+		if (item.isMember("resistance2")){
+			int resistance = ReadResistance(item["resistance2"].asString());
+			mux_channel.Resistance2 = resistance;
+		}
+
+		mux_channel.CurrentCalibrationFactor = item.get("current_calibration_factor", 1).asFloat();
+	}
 
     void LoadConfig(const std::string& file_name, THandlerConfig& config)
     {
@@ -65,23 +109,18 @@ namespace {
             }
             if (item.isMember("id")) {
                 TMUXChannel buf_channel;
-                buf_channel.Id = item["id"].asString();
-                if (item.isMember("multiplier"))
-                    buf_channel.Multiplier = item["multiplier"].asFloat();
-                if (item.isMember("readings_number")) {
-                    buf_channel.ReadingsNumber = item["readings_number"].asInt();
-                }
-                if (item.isMember("decimal_places")) {
-                    buf_channel.DecimalPlaces = item["decimal_places"].asInt();
-                }
-                if (item.isMember("discharge_channel")) {
-                    buf_channel.DischargeChannel = item["discharge_channel"].asInt();
-                }
+                PopulateMuxChannel(buf_channel, item);
+
+                if (item.isMember("scale"))
+                    new_channel.Scale = item["scale"].asFloat();
+
                 new_channel.Mux.push_back(buf_channel);
             }
 
             if (item.isMember("min_switch_interval_ms"))
                 new_channel.MinSwitchIntervalMs = item["min_switch_interval_ms"].asInt();
+            if (item.isMember("match_iio"))
+                new_channel.MatchIIO = item["match_iio"].asString();
             if (item.isMember("channel_number"))
                 new_channel.ChannelNumber = item["channel_number"].asInt();
 
@@ -106,37 +145,13 @@ namespace {
                 for (unsigned int channel_number = 0; channel_number < channel_array.size(); channel_number++){
                     const auto& channel_iterator = channel_array[channel_number];
                     TMUXChannel element;
-                    if (channel_iterator.isMember("readings_number")) {
-                        element.ReadingsNumber = channel_iterator["readings_number"].asInt();
-                    }
-                    if (channel_iterator.isMember("decimal_places")) {
-                        element.DecimalPlaces = channel_iterator["decimal_places"].asInt();
-                    }
+                    
+                    PopulateMuxChannel(element, channel_iterator);
+                    
                     if (channel_iterator.isMember("mux_channel_number")) {
                         element.MuxChannelNumber = channel_iterator["mux_channel_number"].asInt();
                     }
-                    if (channel_iterator.isMember("id"))
-                        element.Id = channel_iterator["id"].asString();
-                    if (channel_iterator.isMember("multiplier"))
-                        element.Multiplier = channel_iterator["multiplier"].asFloat();
-                    if (channel_iterator.isMember("type"))
-                        element.Type = channel_iterator["type"].asString();
-                    if (channel_iterator.isMember("current")){
-                        int current = channel_iterator["current"].asInt();
-                        if ( (current < 0) || (current > 300) || ( (current % 20) != 0)) {
-                            cerr << "Error: wrong current value \n";
-                            exit(EXIT_FAILURE);
-                        }
-                        element.Current = current;
-                    }
-                    if (channel_iterator.isMember("resistance1")){
-                        int resistance = ReadResistance(channel_iterator["resistance1"].asString());
-                        element.Resistance1 = resistance;
-                    }
-                    if (channel_iterator.isMember("resistance2")){
-                        int resistance = ReadResistance(channel_iterator["resistance2"].asString());
-                        element.Resistance2 = resistance;
-                    }
+                    
                     if (channel_iterator.isMember("discharge_channel")) {
                         element.DischargeChannel = channel_iterator["discharge_channel"].asInt();
                     }
@@ -210,7 +225,7 @@ int main(int argc, char **argv)
                 cout << "GPIO IS " << j << endl;
             }
         }*/
-        std::shared_ptr<TMQTTAdcHandler> mqtt_handler( new TMQTTAdcHandler(mqtt_config, config));
+        auto mqtt_handler = make_shared<TMQTTAdcHandler>(mqtt_config, config);
         mqtt_handler->Init();
         while(1){
                 rc = mqtt_handler->loop();

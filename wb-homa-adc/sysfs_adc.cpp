@@ -8,137 +8,153 @@
 #include <chrono>
 #include <thread>
 #include <math.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <string.h>
 
 #include "sysfs_adc.h"
+#include "lradc_isrc.h"
 namespace {
-        extern "C" int imx233_rd(long offset);
-        extern "C" int imx233_wr(long offset, long value);
         extern "C" void usleep(int value);
 };
-/*
-namespace {
-    struct ChannelName {
-        int n;
-        const char* name;
-    };
 
-    ChannelName channel_names[] = {
-        {0, "adc0"},
-        {1, "adc1"},
-        {2, "adc2"},
-        {3, "adc3"},
-        {4, "adc4"},
-        {5, "adc5"},
-        {6, "adc6"},
-        {7, "adc7"},
-#if 0
-        // later
-        {0, "a1"},
-        {0, "adc1"},
-        {1, "a2"},
-        {1, "adc2"},
-        {2, "a3"},
-        {2, "adc3"},
-        {3, "a4"},
-        {3, "adc4"},
-        {4, "r1"},
-        {5, "r4"},
-        {6, "r2"},
-        {7, "r3"},
-#endif
-        {-1, 0}
-    };
-    int GetChannelIndex(const std::string& name)
-    {
-        std::string locase_name = name;
-        std::transform(locase_name.begin(), locase_name.end(), locase_name.begin(), ::tolower);
-        for (ChannelName* name_item = channel_names; name_item->n >= 0; ++name_item) {
-            if (locase_name == name_item->name)
-                return name_item->n;
-        }
-        throw TAdcException("invalid channel name " + name);
-    }
-
-    int GetGPIOFromEnv(const std::string& name)
-    {
-        char* s = getenv(name.c_str());
-        if (!s)
-            throw TAdcException("Environment variable not set: " + name);
-        try {
-            return std::stoi(s);
-        } catch (std::exception) {
-            throw TAdcException("Invalid value of environment variable '" + name + "': " + s);
-        }
-    }
-};
-*/
-TSysfsAdc::TSysfsAdc(const std::string& sysfs_dir, bool debug, const TChannel& channel_config)
-    : SysfsDir(sysfs_dir),
-    ChannelConfig(channel_config),
-    MaxVoltage(ChannelConfig.MaxVoltage)
+void TSysfsAdc::SelectScale()
 {
-    ScaleFactor = ADC_DEFAULT_SCALE_FACTOR;
-    AveragingWindow = ChannelConfig.AveragingWindow;
-    Debug = debug;
-    Initialized = false;
-    string path_to_value = SysfsDir + "/bus/iio/devices/iio:device0/in_voltage" + to_string(ChannelConfig.ChannelNumber) + "_raw";
-    AdcValStream.open(path_to_value);
-    if (AdcValStream < 0) {
-        throw TAdcException("error opening sysfs Adc file");
-    }
-    string scale_prefix = "/sys/bus/iio/devices/iio:device0/in_voltage" + to_string(ChannelConfig.ChannelNumber) + "_scale";
+    string scale_prefix = SysfsIIODir + "/in_voltage" + to_string(GetLradcChannel()) + "_scale";
     ifstream scale_file(scale_prefix + "_available");
     if (scale_file.is_open()) {
-        vector<string> scales;
+        string best_scale_str;
+        double best_scale = 0;
+
+
         char c;
         string buf = "";
         while(scale_file.get(c)) {
             if (c == ' ') {
-                scales.push_back(buf);
+                double val = stod(buf);
+                // best scale is either maximum scale or the one closest to user request
+
+                if (((ChannelConfig.Scale > 0) && (fabs(val - ChannelConfig.Scale) <= fabs(best_scale - ChannelConfig.Scale)))      // user request
+                    ||
+                    ((ChannelConfig.Scale <= 0) && (val >= best_scale))      // maximum scale
+                    )
+                {
+                        best_scale = val;
+                        best_scale_str = buf;
+                }
+
                 buf = "";
             } else {
                 buf += c;
             }
         }
-        double max = ADC_DEFAULT_SCALE_FACTOR;
-        int i = 0;
-        int position = 0; 
-        for (const auto& element : scales) {
-            double val = stod(element);
-            if (val > max) {
-                max = val;
-                position = i;
-            }
-            i++;
-        }
         scale_file.close();
+        IIOScale = best_scale;
+
         ofstream write_scale(scale_prefix);
         if (!write_scale.is_open()) {
             throw TAdcException("error opening sysfs Adc scale file");
         }
-        ScaleFactor = max;
-        write_scale << scales[position]; 
+        write_scale << best_scale_str;
         write_scale.close();
+    } else {
+        // scale_available file is not present
+        // read the current scale from sysfs
+        ifstream cur_scale(scale_prefix);
+        if (cur_scale.is_open()) {
+            cur_scale >> IIOScale;
+            cur_scale.close();
+        }
     }
+}
+
+
+TSysfsAdc::TSysfsAdc(const std::string& sysfs_dir, bool debug, const TChannel& channel_config)
+    : SysfsDir(sysfs_dir),
+    ChannelConfig(channel_config),
+    MaxVoltage(ChannelConfig.MaxVoltage)
+{
+    IIOScale = MXS_LRADC_DEFAULT_SCALE_FACTOR;
+    AveragingWindow = ChannelConfig.AveragingWindow;
+    Debug = debug;
+    Initialized = false;
+
+    string iio_dev_dir = SysfsDir + "/bus/iio/devices";
+    string iio_dev_name = "";
+    if (!channel_config.MatchIIO.empty()) {
+        DIR *dir;
+        struct dirent *ent;
+        if ((dir = opendir(iio_dev_dir.c_str())) != NULL) {
+            while ((ent = readdir (dir)) != NULL) {
+                if (!strstr(ent->d_name, "iio:device"))
+                    continue;
+                string d = iio_dev_dir + "/" + string(ent->d_name);
+                char buf[512];
+                int len;
+                if ((len = readlink(d.c_str(), buf, 512)) < 0)
+                    continue;
+                buf[len] = 0;
+                if (strstr(buf, channel_config.MatchIIO.c_str())) {
+                    iio_dev_name = string(ent->d_name);
+                    break;
+                }
+            }
+            closedir(dir);
+            if (iio_dev_name.empty()) {
+                throw TAdcException("couldn't match sysfs IIO " + channel_config.MatchIIO);
+            }
+        }
+        else {
+            /* could not open directory */
+            throw TAdcException("error opening sysfs IIO directory");
+        }
+    }
+    else {
+        iio_dev_name = "iio:device0";
+    }
+    SysfsIIODir = iio_dev_dir + "/" + iio_dev_name;
+
+    string path_to_value = SysfsIIODir + "/in_voltage" + to_string(GetLradcChannel()) + "_raw";
+    AdcValStream.open(path_to_value);
+    if (!AdcValStream.is_open()) {
+        throw TAdcException("error opening sysfs Adc file");
+    }
+    
+    SelectScale();
+
+     ::SwitchOffCurrentSource(
+        GetCurrentSourceChannelNumber(
+            GetLradcChannel()));
+
     NumberOfChannels = channel_config.Mux.size();
 }
 
-TSysfsAdc::~TSysfsAdc()
+std::unique_ptr<TSysfsAdcChannel> TSysfsAdc::GetChannel(int i)
 {
-    if (AdcValStream.is_open()){
-        AdcValStream.close();
-    }
-}
-
-std::shared_ptr<TSysfsAdcChannel> TSysfsAdc::GetChannel(int i)
-{
-    std::shared_ptr<TSysfsAdcChannel> ptr(nullptr);
+    
+    // Check whether all Mux channels are OHM_METERs
+    bool resistance_channels_only = true;
+    for (const auto & mux_ch : ChannelConfig.Mux) {
+        if (mux_ch.Type != OHM_METER) {
+            resistance_channels_only = false;
+        }
+    }    
+        
     // TBD: should pass chain_alias also (to be used instead of Name for the channel)
     if (ChannelConfig.Mux[i].Type == OHM_METER)
-        ptr.reset (new TSysfsAdcChannelRes(this, ChannelConfig.Mux[i].MuxChannelNumber, ChannelConfig.Mux[i].Id, ChannelConfig.Mux[i].ReadingsNumber, ChannelConfig.Mux[i].DecimalPlaces, ChannelConfig.Mux[i].DischargeChannel, ChannelConfig.Mux[i].Current, ChannelConfig.Mux[i].Resistance1, ChannelConfig.Mux[i].Resistance2));
+        return std::unique_ptr<TSysfsAdcChannelRes>(new TSysfsAdcChannelRes(this, ChannelConfig.Mux[i].MuxChannelNumber, ChannelConfig.Mux[i].Id, 
+                                           ChannelConfig.Mux[i].ReadingsNumber, ChannelConfig.Mux[i].DecimalPlaces, 
+                                           ChannelConfig.Mux[i].DischargeChannel, ChannelConfig.Mux[i].Current, 
+                                           ChannelConfig.Mux[i].Resistance1, ChannelConfig.Mux[i].Resistance2,
+                                           /* current_source_always_on = */ resistance_channels_only,
+                                           ChannelConfig.Mux[i].CurrentCalibrationFactor
+                                           ));
     else
-        ptr.reset(new TSysfsAdcChannel(this, ChannelConfig.Mux[i].MuxChannelNumber, ChannelConfig.Mux[i].Id, ChannelConfig.Mux[i].ReadingsNumber, ChannelConfig.Mux[i].DecimalPlaces, ChannelConfig.Mux[i].DischargeChannel, ChannelConfig.Mux[i].Multiplier));
-    return ptr;
+        return  std::unique_ptr<TSysfsAdcChannel>(new TSysfsAdcChannel(this, ChannelConfig.Mux[i].MuxChannelNumber,
+                                       ChannelConfig.Mux[i].Id, ChannelConfig.Mux[i].ReadingsNumber,
+                                       ChannelConfig.Mux[i].DecimalPlaces, ChannelConfig.Mux[i].DischargeChannel,
+                                       ChannelConfig.Mux[i].Multiplier));
+    return std::unique_ptr<TSysfsAdcChannel>(nullptr);
 }
 
 int TSysfsAdc::ReadValue()
@@ -151,17 +167,13 @@ int TSysfsAdc::ReadValue()
 
 bool TSysfsAdc::CheckVoltage(int value)
 {
-    float voltage = ScaleFactor * value;
+    float voltage = IIOScale * value;
     if (voltage > MaxVoltage) {
         return false;
     }
     return true;
 }
 
-void TSysfsAdc::SetMuxABC(int n)
-{
-    return;
-}
 
 TSysfsAdcMux::TSysfsAdcMux(const std::string& sysfs_dir, bool debug, const TChannel& channel_config)
     : TSysfsAdc(sysfs_dir, debug, channel_config)
@@ -174,10 +186,9 @@ TSysfsAdcMux::TSysfsAdcMux(const std::string& sysfs_dir, bool debug, const TChan
 }
 
 
-int TSysfsAdcMux::GetRawValue(int index)
+void TSysfsAdcMux::SelectMuxChannel(int index)
 {
     SetMuxABC(index);
-    return ReadValue(); 
 }
 
 void TSysfsAdcMux::InitMux()
@@ -263,9 +274,8 @@ TSysfsAdcPhys::TSysfsAdcPhys(const std::string& sysfs_dir, bool debug, const TCh
 {
 }
 
-int TSysfsAdcPhys::GetRawValue(int index)
+void TSysfsAdcPhys::SelectMuxChannel(int index)
 {
-   return ReadValue();
 }
 
 
@@ -273,12 +283,12 @@ TSysfsAdcChannel::TSysfsAdcChannel(TSysfsAdc* owner, int index, const std::strin
     : DecimalPlaces(decimal_places)
     , d(new TSysfsAdcChannelPrivate())
 {
-    d->Owner.reset(owner);
+    d->Owner = owner;
     d->Index = index;
     d->Name = name;
     d->ReadingsNumber = readings_number;
     d->ChannelAveragingWindow = readings_number * d->Owner->AveragingWindow;
-    d->Buffer = new int[d->ChannelAveragingWindow](); // () initializes with zeros
+    d->Buffer.resize(d->ChannelAveragingWindow); // initializes with zeros
     d->DischargeChannel = discharge_channel;
 }
 
@@ -292,14 +302,17 @@ int TSysfsAdcChannel::GetAverageValue()
 {
     if (!d->Ready) {
         for (int i = 0; i < d->ChannelAveragingWindow; ++i) {
-            int v = d->Owner->GetRawValue(d->Index);
+            d->Owner->SelectMuxChannel(d->Index);
+            int v = d->Owner->ReadValue();
+
             d->Buffer[i] = v;
             d->Sum += v;
         }
         d->Ready = true;
     } else {
         for (int i = 0; i < d->ReadingsNumber; i++) {
-            int v = d->Owner->GetRawValue(d->Index);
+            d->Owner->SelectMuxChannel(d->Index);
+            int v = d->Owner->ReadValue();
             d->Sum -= d->Buffer[d->Pos];
             d->Sum += v;
             d->Buffer[d->Pos++] = v;
@@ -317,17 +330,15 @@ const std::string& TSysfsAdcChannel::GetName() const
 
 float TSysfsAdcChannel::GetValue()
 {
-    float result = -1;
+    float result = std::nan("");
     int value = GetAverageValue();
     if (value < ADC_VALUE_MAX) {
         if (d->Owner->CheckVoltage(value)) {
             result = (float) value * Multiplier / 1000; // set voltage to V from mV
-            result *= d->Owner->ScaleFactor / ADC_DEFAULT_SCALE_FACTOR;
+            result *= d->Owner->IIOScale;
         }
     }
-    if (result < 0) {
-        result = std::nan("");
-    }
+
     return result;
 }
 std::string TSysfsAdcChannel::GetType()
@@ -335,53 +346,63 @@ std::string TSysfsAdcChannel::GetType()
     return "voltage";
 }
 
-TSysfsAdcChannelRes::TSysfsAdcChannelRes(TSysfsAdc* owner, int index, const std::string& name, int readings_number, int decimal_places, int discharge_channel, int current, int resistance1, int resistance2)
+TSysfsAdcChannelRes::TSysfsAdcChannelRes(TSysfsAdc* owner, int index, const std::string& name,
+                                         int readings_number, int decimal_places, int discharge_channel, 
+                                         int current, int resistance1, int resistance2, 
+                                         bool source_always_on, float current_calibration_factor)
     : TSysfsAdcChannel(owner, index, name, readings_number, decimal_places, discharge_channel)
+    , Current(current)
+    , Resistance1(resistance1)
+    , Resistance2(resistance2)
+    , Type(OHM_METER)
+    , SourceAlwaysOn(source_always_on)
+    , CurrentCalibrationFactor(current_calibration_factor)
 {
-    Current = current;
-    Resistance1 = resistance1;
-    Resistance2 = resistance2;
-    Type = OHM_METER;
-    Ctrl2_val = (current / 20) << 4;
+    CurrentSourceChannel =  GetCurrentSourceChannelNumber(owner->GetLradcChannel());
+
+    if (SourceAlwaysOn) SetUpCurrentSource(); 
 }
 
 
 float TSysfsAdcChannelRes::GetValue()
 {
     if (d->DischargeChannel != -1) {
-        d->Owner->SetMuxABC(d->DischargeChannel);
+        d->Owner->SelectMuxChannel(d->DischargeChannel);
     }
-    d->Owner->SetMuxABC(d->Index);
-    SetUpCurrentSource(); 
-    this_thread::sleep_for(chrono::milliseconds(DELAY));
+    d->Owner->SelectMuxChannel(d->Index);
+    
+    if (!SourceAlwaysOn) {
+        SetUpCurrentSource(); 
+        this_thread::sleep_for(chrono::milliseconds(DELAY));
+    }
+    
     int value = GetAverageValue(); 
-    float result = -1;
+    float result = std::nan("");
     if (value < ADC_VALUE_MAX) {
         if (d->Owner->CheckVoltage(value)) {
-            float voltage = d->Owner->ScaleFactor * value / 1000;// get voltage in V (from mV)
-            result = 1.0/ ((Current / 1000000.0) / voltage - 1.0/Resistance1) - Resistance2;
+            float voltage = d->Owner->IIOScale * value / 1000;// get voltage in V (from mV)
+            result = 1.0/ ((Current * CurrentCalibrationFactor / 1000000.0) / voltage - 1.0/Resistance1) - Resistance2;
+            if (result < 0) {
+                result = 0;
+            }
             result = round(result);
         }
     }
-    if (result < 0) {
-        result = std::nan("");
-    }
-    SwitchOffCurrentSource();
+    
+    if (!SourceAlwaysOn) SwitchOffCurrentSource();
     return result;
 }
 
 std::string TSysfsAdcChannelRes::GetType()
 {
-        return "resistance";
+    return "resistance";
 }
 void TSysfsAdcChannelRes::SetUpCurrentSource()
 {
-    imx233_wr(HW_LRADC_CTRL2_SET, 0x0200); //set TEMP_SENSOR_IENABLE1
-    imx233_wr(HW_LRADC_CTRL2_CLR, 0xF0); //clear TEMP_ISRC1
-    imx233_wr(HW_LRADC_CTRL2_SET, Ctrl2_val); //set TEMP_ISRC1
+    ::SetUpCurrentSource(CurrentSourceChannel, Current);
 }
 
 void TSysfsAdcChannelRes::SwitchOffCurrentSource()
 {
-    imx233_wr(HW_LRADC_CTRL2_CLR, 0x0200); //set TEMP_SENSOR_IENABLE1=0
+    ::SwitchOffCurrentSource(CurrentSourceChannel);
 }
