@@ -189,7 +189,7 @@ void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
         printf("TMQTTOnewireHandler::OnMessage device %s\n", device.c_str());
         for (auto& current : Channels){
             if (device == current.GetDeviceId()){
-                if (current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408 || current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){
+                if (current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408){
                    size_t startpos2 = device_on.find("/light/on");
                    if (startpos2 == 24){ 
                         if( std::isdigit((char)device_on.c_str()[startpos2-1])) {
@@ -204,6 +204,24 @@ void TMQTTOnewireHandler::OnMessage(const struct mosquitto_message *message)
                             }
                         }
 	            }
+                }
+                if (current.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){
+			    printf (" Light number \n");
+                   size_t startpos2 = device_on.find("/light/on");
+                   if (startpos2 == 24){ 
+                        if( std::isdigit((char)device_on.c_str()[startpos2-1])) {
+                            int light_number = std::stoi(device_on.substr(startpos2-1));
+    			    string payload = static_cast<const char*>(message->payload);
+			    printf (" Light number %i\n", light_number);
+		            if (payload.size() >0){	
+                                int param = std::stoi(payload);
+                                printf(" payload %s %i\n", payload.c_str(), param);
+                              //  current.WriteOutput(channel_number, param);
+                                current.SwitchLight3e(param);
+                            }
+                        }
+	            }
+
                 }
                 return;
             }

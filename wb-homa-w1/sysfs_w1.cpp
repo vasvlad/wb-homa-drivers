@@ -164,6 +164,47 @@ TMaybe<char> TSysfsOnewireDevice::ReadState(int channel_number) const
         return NotDefinedMaybe;
 }
 
+TMaybe<char> TSysfsOnewireDevice::ReadStateByte() const
+{
+    bool flag=false;
+
+    unsigned char c = 0;
+    unsigned char result = 0;
+    unsigned char array[3] = {255, 255, 255}; 
+    int attempt = 3;
+    std::ifstream file;
+    std::string fileName=DeviceDir +"/state";
+
+    while (attempt >=0){
+        for (int i = 0; i<3; i++){
+            file.open(fileName.c_str(), std::ifstream::binary);
+            if (file.is_open()) {
+        	    c = file.get();
+                if (file.good()) {
+                    array[i] = c;
+                    flag = true;
+                }
+                file.close();
+            }else{
+        	cout << "File state is not openned"  << endl; 
+            }
+        }
+        if (array[0] == array[1] && array[1] == array[2]){
+           result = array[0];
+           break;
+        }
+    
+        cout << "Read state attempt "  << this->DeviceId << endl; 
+        attempt--;
+    }
+    if (flag){
+//        printf("ReadState %i\n", result);
+        return (char)result;
+    }
+    else
+        return NotDefinedMaybe;
+}
+
 void TSysfsOnewireDevice::WriteOutput(int channel_number, int value)
 {
     unsigned char c = 0;
@@ -225,6 +266,56 @@ return;
     }
     
 }
+
+void TSysfsOnewireDevice::WriteOutputbyte(char outputbyte)
+{
+    std::fstream iofile;
+    std::string fileName=DeviceDir +"/output";
+    iofile.open(fileName.c_str(), std::ios_base::out|std::ios_base::binary);
+    iofile.put(outputbyte);
+    iofile.flush();
+    iofile.close();
+    return;
+}
+
+void TSysfsOnewireDevice::SwitchLight3e(int on)
+{
+    unsigned char state_byte = 0;
+    int attempt = 3;
+    const char state_on = 60;
+    const char state_off = 15;
+
+    printf("TSysfsOnewireDevice::SwitchLight3e. We want %i\n", on);
+    auto result = ReadStateByte();
+    if (result.Defined()) {
+        state_byte = *result;
+    }else{
+        return;
+    }
+
+    if (((on == 1) && (state_byte == state_on)) || ((on == 0) && (state_byte == state_off)))
+        return;
+
+    while (attempt >=0){
+        if (on == 1){
+            WriteOutputbyte(0x2); 
+        }else{
+            WriteOutputbyte(0xFF); 
+        }
+        result = ReadStateByte();
+        if (result.Defined()) {
+            state_byte = *result;
+        }else{
+            return;
+        }
+
+        if ((on == 1 && state_byte == state_on) || (on == 0 && state_byte == state_off ))
+            return;
+        cout << "attempt in SwitchLight"  << endl; 
+        attempt--;
+    }
+}
+
 void TSysfsOnewireDevice::SwitchLight(int output_bit_number, int state_bit_number, int on)
 {
     unsigned char state_bit = 0;
