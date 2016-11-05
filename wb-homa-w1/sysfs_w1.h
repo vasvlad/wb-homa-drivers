@@ -2,6 +2,8 @@
 #include <string>
 #include <map>
 #include <wbmqtt/utils.h>
+#include <chrono>
+#include <ctime>
 
 using namespace std;
 
@@ -31,6 +33,10 @@ public:
     void WriteOutputbyte(char output_byte);
     void SwitchLight(int output_number, int state_number, int on);
     void SwitchLight3e(int on);
+    unsigned char GetStateByte() const;
+    void SetStateByte(unsigned char state_byte);
+    std::time_t GetPublicationTime() const;
+    void SetPublicationTime(std::time_t ptime);
 
     friend bool operator== (const TSysfsOnewireDevice & first, const TSysfsOnewireDevice & second);
 private:
@@ -38,7 +44,8 @@ private:
     TOnewireFamilyType Family;
     string DeviceId;
     string DeviceDir;
-
+    unsigned char statebyte;
+    std::time_t PublicationTime;
 
 };
 

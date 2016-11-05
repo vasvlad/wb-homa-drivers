@@ -5,6 +5,8 @@
 #include "sysfs_w1.h"
 #include <bitset>
 #include <unistd.h>
+#include <ctime>
+#include <chrono>
 
 bool operator== (const TSysfsOnewireDevice & first, const TSysfsOnewireDevice & second)
 {
@@ -29,6 +31,7 @@ TSysfsOnewireDevice::TSysfsOnewireDevice(const string& device_name)
                 Family = TOnewireFamilyType::Unknown;
     DeviceId = DeviceName;
     DeviceDir = SysfsOnewireDevicesPath + DeviceName;
+    PublicationTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()); 
 }
 
 TMaybe<float> TSysfsOnewireDevice::ReadTemperature() const
@@ -120,6 +123,25 @@ TMaybe<char> TSysfsOnewireDevice::ReadOutput(int channel_number) const
         return NotDefinedMaybe;
 }
 
+unsigned char TSysfsOnewireDevice::GetStateByte() const
+{
+    return statebyte;
+}
+
+void TSysfsOnewireDevice::SetStateByte(unsigned char state_byte)
+{
+    statebyte = state_byte;
+}
+
+std::time_t TSysfsOnewireDevice::GetPublicationTime() const
+{
+    return PublicationTime;
+}   
+
+void TSysfsOnewireDevice::SetPublicationTime(std::time_t ptime){
+    PublicationTime = ptime;
+}
+
 TMaybe<char> TSysfsOnewireDevice::ReadState(int channel_number) const
 {
     bool flag=false;
@@ -164,7 +186,7 @@ TMaybe<char> TSysfsOnewireDevice::ReadState(int channel_number) const
         return NotDefinedMaybe;
 }
 
-TMaybe<char> TSysfsOnewireDevice::ReadStateByte() const
+TMaybe<char> TSysfsOnewireDevice::ReadStateByte() const 
 {
     bool flag=false;
 

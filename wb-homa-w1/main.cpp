@@ -106,13 +106,14 @@ void TMQTTOnewireHandler::RescanBus()
 {
     vector<TSysfsOnewireDevice> current_channels;
 
+    fprintf(stderr,"Rescan\n");
     DIR *dir;
     struct dirent *ent;
     string entry_name;
     if ((dir = opendir (SysfsOnewireDevicesPath.c_str())) != NULL) {
         /* print all the files and directories within directory */
         while ((ent = readdir (dir)) != NULL) {
-            printf ("%s\n", ent->d_name);
+            //printf ("%s\n", ent->d_name);
             entry_name = ent->d_name;
             if (StringStartsWith(entry_name, "28-") ||
                 StringStartsWith(entry_name, "29-") ||
@@ -244,14 +245,37 @@ string TMQTTOnewireHandler::GetChannelTopic(const TSysfsOnewireDevice& device) {
 
 void TMQTTOnewireHandler::UpdateChannelValues() {
 
-    for (const TSysfsOnewireDevice& device: Channels) {
+    for (TSysfsOnewireDevice& device: Channels) {
         if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResThermometer){ 
-            auto result = device.ReadTemperature();
-            if (result.Defined()) {
-                Publish(NULL, GetChannelTopic(device), to_string(*result), 0, true); // Publish current value (make retained)
-            }
+           if (((std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + rand() % 20 - device.GetPublicationTime())>100)){
+               auto result = device.ReadTemperature();
+               if (result.Defined()) {
+                   device.SetPublicationTime(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+                   if (*result != 0)
+                       Publish(NULL, GetChannelTopic(device), to_string(*result), 0, true); // Publish current value (make retained)
+               }
+           }
         }
         if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408 || device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){ 
+            unsigned char previous_result = device.GetStateByte();
+            auto result = device.ReadStateByte();
+            if (result.Defined()) {
+               // fprintf(stderr, "Diff %i\n", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) - device.GetPublicationTime());
+                if (((std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + rand() % 20 - device.GetPublicationTime())>60) || (previous_result != (unsigned char)*result)){
+		    device.SetStateByte(*result);
+                    device.SetPublicationTime(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+		    for (int i=0; i<=7; i++){
+			    unsigned char status = *result;
+			    int result_bit = status & (1<<i);
+			    if (result_bit > 0)
+				result_bit = 1;
+			    else
+				result_bit = 0;
+			    Publish(NULL, GetChannelTopic(device)+ "/channel"+ std::to_string(i) + "/state", std::to_string(result_bit), 0, true); // Publish current value (make retained)
+		    }
+                }
+            }
+/*
             for (int i=0; i<=7; i++){
                 auto result = device.ReadState(i);
                 if (result.Defined()) {
@@ -263,6 +287,7 @@ void TMQTTOnewireHandler::UpdateChannelValues() {
 //                }
 
             }
+*/
         }
 
     }
@@ -276,7 +301,7 @@ int main(int argc, char *argv[])
     mqtt_config.Host = "localhost";
     mqtt_config.Port = 1883;
     int poll_interval = 10 * 1000; //milliseconds
-
+    std::time_t end_time_of_rescan = 0;
     int c;
     //~ int digit_optind = 0;
     //~ int aopt = 0, bopt = 0;
@@ -297,7 +322,8 @@ int main(int argc, char *argv[])
             mqtt_config.Host = optarg;
             break;
         case 'i':
-			poll_interval = stoi(optarg) * 1000;
+			//poll_interval = stoi(optarg) * 1000;
+			poll_interval = stoi(optarg) * 100;
         case '?':
             break;
         default:
@@ -312,24 +338,30 @@ int main(int argc, char *argv[])
     mqtt_handler->Init();
     string topic = string("/devices/") + mqtt_config.Id + "/controls/+";
 
-	auto time_last_published = steady_clock::now();
+    auto time_last_published = steady_clock::now();
+    mqtt_handler->RescanBus();
+    end_time_of_rescan = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     while(1){
-		rc = mqtt_handler->loop(poll_interval);
+        rc = mqtt_handler->loop(poll_interval);
         //~ cout << "break in a loop! " << rc << endl;
-		if(rc != 0) {
-			mqtt_handler->reconnect();
-		} else {
+        if(rc != 0) {
+            mqtt_handler->reconnect();
+        } else {
             // update current values
             if (!mqtt_handler->GetPrepareInit()){
-				int time_elapsed = duration_cast<milliseconds>(steady_clock::now() - time_last_published).count() ;
-				if (time_elapsed >= poll_interval ) { //checking is it time to look through all gpios
-	                mqtt_handler->RescanBus();
-	                mqtt_handler->UpdateChannelValues();
-	                time_last_published = steady_clock::now();
-				}
+                int time_elapsed = duration_cast<milliseconds>(steady_clock::now() - time_last_published).count() ;
+                if (time_elapsed >= poll_interval ) { //checking is it time to look through all gpios
+                    if ((std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) - end_time_of_rescan) > 600){
+	                   mqtt_handler->RescanBus();
+                           end_time_of_rescan = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+                    }
+	                //mqtt_handler->RescanBus();
+	            mqtt_handler->UpdateChannelValues();
+	            time_last_published = steady_clock::now();
+		}
             }
         }
-	}
+    }
 
 	mosqpp::lib_cleanup();
 
