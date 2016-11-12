@@ -250,8 +250,9 @@ void TMQTTOnewireHandler::UpdateChannelValues() {
            if (((std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + rand() % 20 - device.GetPublicationTime())>100)){
                auto result = device.ReadTemperature();
                if (result.Defined()) {
+                   float temperature = *result;
                    device.SetPublicationTime(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
-                   //if (*result != 0)
+                   if (temperature != 0.0)
                        Publish(NULL, GetChannelTopic(device), to_string(*result), 0, true); // Publish current value (make retained)
                }
            }
