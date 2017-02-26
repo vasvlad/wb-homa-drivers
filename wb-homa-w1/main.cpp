@@ -147,6 +147,9 @@ void TMQTTOnewireHandler::RescanBus()
         if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){
             Publish(NULL, GetChannelTopic(device) + "/meta/type", "switch", 0, true);
         }  
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2406){
+            Publish(NULL, GetChannelTopic(device) + "/meta/type", "switch", 0, true);
+        }  
     }
 
     //delete retained messages for absent channels
@@ -160,6 +163,10 @@ void TMQTTOnewireHandler::RescanBus()
             Publish(NULL, GetChannelTopic(device), "", 0, true);
         }
         if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){ 
+            Publish(NULL, GetChannelTopic(device) + "/meta/type", "", 0, true);
+            Publish(NULL, GetChannelTopic(device), "", 0, true);
+        }
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2406){ 
             Publish(NULL, GetChannelTopic(device) + "/meta/type", "", 0, true);
             Publish(NULL, GetChannelTopic(device), "", 0, true);
         }
@@ -257,7 +264,8 @@ void TMQTTOnewireHandler::UpdateChannelValues() {
                }
            }
         }
-        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408 || device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){ 
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408 || device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413 || 
+            device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2406){ 
             unsigned char previous_result = device.GetStateByte();
             auto result = device.ReadStateByte();
             if (result.Defined()) {
