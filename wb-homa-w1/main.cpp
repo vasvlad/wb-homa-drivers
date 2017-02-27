@@ -119,6 +119,7 @@ void TMQTTOnewireHandler::RescanBus()
                 StringStartsWith(entry_name, "29-") ||
                 StringStartsWith(entry_name, "10-") ||
                 StringStartsWith(entry_name, "3a-") ||
+                StringStartsWith(entry_name, "12-") ||
                 StringStartsWith(entry_name, "22-") )
             {
                     current_channels.emplace_back(entry_name);
