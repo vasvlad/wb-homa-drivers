@@ -189,6 +189,47 @@ TMaybe<char> TSysfsOnewireDevice::ReadState(int channel_number) const
         return NotDefinedMaybe;
 }
 
+TMaybe<char> TSysfsOnewireDevice::ReadChannelAccessByte() const 
+{
+    bool flag=false;
+
+    unsigned char c = 0;
+    unsigned char result = 0;
+    unsigned char array[3] = {255, 255, 255}; 
+    int attempt = 3;
+    std::ifstream file;
+    std::string fileName=DeviceDir +"/channel_access";
+
+    while (attempt >=0){
+        for (int i = 0; i<3; i++){
+            file.open(fileName.c_str(), std::ifstream::binary);
+            if (file.is_open()) {
+        	    c = file.get();
+                if (file.good()) {
+                    array[i] = c;
+                    flag = true;
+                }
+                file.close();
+            }else{
+        	cout << "File channel_access is not openned"  << endl; 
+            }
+        }
+        if (array[0] == array[1] && array[1] == array[2]){
+           result = array[0];
+           break;
+        }
+    
+        cout << "Read channel_access attempt "  << this->DeviceId << endl; 
+        attempt--;
+    }
+    if (flag){
+//        printf("ReadState %i\n", result);
+        return (char)result;
+    }
+    else
+        return NotDefinedMaybe;
+}
+
 TMaybe<char> TSysfsOnewireDevice::ReadStateByte() const 
 {
     bool flag=false;

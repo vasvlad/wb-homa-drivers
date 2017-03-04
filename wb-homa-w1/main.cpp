@@ -265,8 +265,7 @@ void TMQTTOnewireHandler::UpdateChannelValues() {
                }
            }
         }
-        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408 || device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413 || 
-            device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2406){ 
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2408 || device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2413){ 
             unsigned char previous_result = device.GetStateByte();
             auto result = device.ReadStateByte();
             if (result.Defined()) {
@@ -299,7 +298,26 @@ void TMQTTOnewireHandler::UpdateChannelValues() {
             }
 */
         }
-
+        if (device.GetDeviceFamily() == TOnewireFamilyType::ProgResDS2406){ 
+            unsigned char previous_result = device.GetStateByte();
+            auto result = device.ReadChannelAccessByte();
+            if (result.Defined()) {
+               // fprintf(stderr, "Diff %i\n", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) - device.GetPublicationTime());
+                if (((std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) + rand() % 20 - device.GetPublicationTime())>60) || (previous_result != (unsigned char)*result)){
+		    device.SetStateByte(*result);
+                    device.SetPublicationTime(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+		    for (int i=0; i<=7; i++){
+			    unsigned char status = *result;
+			    int result_bit = status & (1<<i);
+			    if (result_bit > 0)
+				result_bit = 1;
+			    else
+				result_bit = 0;
+			    Publish(NULL, GetChannelTopic(device)+ "/channel"+ std::to_string(i) + "/channel_access", std::to_string(result_bit), 0, true); // Publish current value (make retained)
+		    }
+                }
+            }
+        }
     }
 }
 

@@ -30,6 +30,7 @@ public:
     TMaybe<char> ReadOutput(int channnel_number) const;
     TMaybe<char> ReadState(int channnel_number) const;
     TMaybe<char> ReadStateByte() const;
+    TMaybe<char> ReadChannelAccessByte() const;
     void WriteOutput(int channnel_number, int value);
     void WriteOutputbyte(char output_byte);
     void SwitchLight(int output_number, int state_number, int on);
