@@ -348,7 +348,8 @@ void TSysfsOnewireDevice::SwitchLight3e(int on)
 {
     unsigned char state_byte = 0;
     int attempt = 3;
-    const char state_on = 60;
+    //const char state_on = 60; /* For second channel */
+    const char state_on = 195; /* For first channel */
     const char state_off = 15;
 
     printf("TSysfsOnewireDevice::SwitchLight3e. We want %i\n", on);
@@ -364,7 +365,7 @@ void TSysfsOnewireDevice::SwitchLight3e(int on)
 
     while (attempt >=0){
         if (on == 1){
-            WriteOutputbyte(0x2); 
+            WriteOutputbyte(0x1); 
         }else{
             WriteOutputbyte(0xFF); 
         }
